@@ -1,8 +1,36 @@
-# lasi17-writing-analytics
+# LASI'17 - Writing Analytics Workshop
 
-> Discuss the resources online in the [LASI-17 Room](https://gitter.im/writing-analytics/LASI-17) of the Gitter [Writing Analytics Community](https://gitter.im/writing-analytics).
+These are the resources for the [LASI'17 Writing Analytics Workshop](http://lasi.solaresearch.org/workshop-list-17/), 13-15 June 2017, [University of Michigan](http://umich.edu), Ann Arbor, USA.
 
-The JSON files in this repo are Zeppelin notes which can be imported into a running Zeppelin instance with the following steps:
+#### Presenters:
+
+  - [Andrew Gibson](http://andrewresearch.net), Research Fellow in Writing Analytics, [Connected Intelligence Centre](http://utscic.edu.au), [University of Technology Sydney](http://uts.edu.au), Australia.
+  
+  - [Simon Buckingham Shum](http://www.uts.edu.au/staff/simon.buckinghamshum), Professor of Learning Informatics, Director [Connected Intelligence Centre](http://utscic.edu.au), [University of Technology Sydney](http://uts.edu.au), Australia.
+
+#### Program:
+
+- [Session 1](outlines/lasi17-waw-1) (Tues 1:30-3:00pm)
+
+- [Session 2](outlines/lasi17-waw-2) (Tues 3:30-5:00pm)
+
+- [Session 3](outlines/lasi17-waw-3) (Wed 1:30-3:00pm)
+
+- [Session 4](outlines/lasi17-waw-4) (Wed 3:30-5:00pm)
+
+- [Session 5](outlines/lasi17-waw-5) (Thurs 9:00-10:30am)
+
+#### Discussion:
+
+An online discussion on Writing Analytics can be found at [Gitter](https://gitter.im/writing-analytics). Discussion specific to this workshop can be joined in the [LASI-17 Room](https://gitter.im/writing-analytics/LASI-17)
+
+### Zeppelin
+
+Install Zeppelin locally on your own machine by downloading from [zeppelin.apache.org](http://zeppelin.apache.org).
+ 
+### Zeppelin notes 
+
+The JSON files in the notes directory this repo are Zeppelin notes which can be imported into a running Zeppelin instance with the following steps:
 
 1. Open Zeppelin in a web browser
 2. Click the link “Import Note”
