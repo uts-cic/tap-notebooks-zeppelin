@@ -2,7 +2,7 @@
 
 > Discuss this session online in the [LASI-17 Room](https://gitter.im/writing-analytics/LASI-17) of the Gitter [Writing Analytics Community](https://gitter.im/writing-analytics).
 
-### Document collections [Notebook 8](../blob/master/lasi17)
+### Document collections [Note 08](../blob/master/lasi17)
 
 - What is a document?
 - What is a collection?
@@ -18,4 +18,6 @@
 - What does a topic mean?
 - Is this meaningful to the learner or educator?
 
-### Sessions 3 & 4 Wrap-up
+### Experiment with your own data [Template Note](../notes/Template_Note)
+
+  [<< SESSION 3](./lasi17-waw-2.md) | [SESSION 5 >>](./lasi17-waw-4.md)

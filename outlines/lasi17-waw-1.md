@@ -13,6 +13,11 @@
 
 > Discuss this session online in the [LASI-17 Room](https://gitter.im/writing-analytics/LASI-17) of the Gitter [Writing Analytics Community](https://gitter.im/writing-analytics).
 
+### Overview [Note 00](../notes/00_Overview.json)
+
+- The process from data to learner
+- Fundamentals
+
 ### A little philosophy    
 
 - Representation and Meaning
@@ -26,7 +31,15 @@
     * critical view of the technical approaches (the world of the machine)
     * building a bridge - a meaning bridge
     
-### Getting started with notebooks [Notebook 1](../blob/master/lasi17/Notebook_01-GettingStarted.ipynb)    
+### End Product Demos
+
+- [Academic Writing Analytics (AWA)](http://awa.uts.edu.au)
+- [Learner Metacognition](http://nlytx.io/2016/metacognition/index.html)
+
+
+## Digging deeper 
+
+### Zeppelin basics [Note 01](../notes/01_Basics)
 
 - Tour of GitHub and workshop resources
     * using the workbooks  - or not
@@ -38,8 +51,8 @@
     * how to work together?
     * thoughts on accuracy and precision
     * thoughts on evaluation
-    
-### Text Wrangling [Notebook 2](../blob/master/lasi17/Notebook_02-TextWrangling.ipynb)
+
+### Text Wrangling [Note 01](../notes/02_TextWrangling)    
 
 - cleaning: why is this non-trivial?
 
@@ -51,3 +64,6 @@
 - bridge building    
     * what are the implications for pedagogy?
     * what does the theory say?
+    
+    
+[SESSION 2 >>](./lasi17-waw-2.md)

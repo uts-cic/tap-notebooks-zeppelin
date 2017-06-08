@@ -10,15 +10,15 @@ These are the resources for the [LASI'17 Writing Analytics Workshop](http://lasi
 
 #### Program:
 
-- [Session 1](outlines/lasi17-waw-1) (Tues 1:30-3:00pm)
+- [Session 1](outlines/lasi17-waw-1.md) (Tues 1:30-3:00pm)
 
-- [Session 2](outlines/lasi17-waw-2) (Tues 3:30-5:00pm)
+- [Session 2](outlines/lasi17-waw-2.md) (Tues 3:30-5:00pm)
 
-- [Session 3](outlines/lasi17-waw-3) (Wed 1:30-3:00pm)
+- [Session 3](outlines/lasi17-waw-3.md) (Wed 1:30-3:00pm)
 
-- [Session 4](outlines/lasi17-waw-4) (Wed 3:30-5:00pm)
+- [Session 4](outlines/lasi17-waw-4.md) (Wed 3:30-5:00pm)
 
-- [Session 5](outlines/lasi17-waw-5) (Thurs 9:00-10:30am)
+- [Session 5](outlines/lasi17-waw-5.md) (Thurs 9:00-10:30am)
 
 #### Discussion:
 

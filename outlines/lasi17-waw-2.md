@@ -2,7 +2,7 @@
 
 > Discuss this session online in the [LASI-17 Room](https://gitter.im/writing-analytics/LASI-17) of the Gitter [Writing Analytics Community](https://gitter.im/writing-analytics).
 
-### Basic Metrics [Notebook 3](../blob/master/lasi17/Notebook_03-BasicMetrics.ipynb)
+### Basic Metrics [Note 03](../notes/03_BasicMetrics.json)
 
 - Counting things
     * Why is counting good?
@@ -20,7 +20,7 @@
     * What does the theory say?
  
     
-### Representing the analytics [Notebook 4](../blob/master/lasi17/Notebook_04-RepresentingAnalytics.ipynb)
+### Representing the analytics [Note 04](../notes/04_RepresentingAnalytics)
 
 - Revisiting representation and meaning
     * Just because something is in the UI, doesn’t mean the user finds it meaningful
@@ -34,4 +34,7 @@
 - Bridge building
   * How would different pedagogical contexts require different UI designs?
 
-### Sessions 1 & 2 Wrap-up
+### Experiment with your own data [Template Note](../notes/Template_Note)
+
+
+[<< SESSION 1](./lasi17-waw-1.md) | [SESSION 3 >>](./lasi17-waw-3.md)
