@@ -20,6 +20,10 @@ These are the resources for the [LASI'17 Writing Analytics Workshop](http://lasi
 
 - [Session 5](outlines/lasi17-waw-5.md) (Thurs 9:00-10:30am)
 
+### Other contributions
+
+
+
 #### Discussion:
 
 An online discussion on Writing Analytics can be found at [Gitter](https://gitter.im/writing-analytics). Discussion specific to this workshop can be joined in the [LASI-17 Room](https://gitter.im/writing-analytics/LASI-17)
