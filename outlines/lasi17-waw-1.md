@@ -13,11 +13,6 @@
 
 > Discuss this session online in the [LASI-17 Room](https://gitter.im/writing-analytics/LASI-17) of the Gitter [Writing Analytics Community](https://gitter.im/writing-analytics).
 
-### Overview [Note 00](../notes/00_Overview.json)
-
-- The process from data to learner
-- Fundamentals
-
 ### A little philosophy    
 
 - Representation and Meaning
@@ -31,20 +26,11 @@
     * critical view of the technical approaches (the world of the machine)
     * building a bridge - a meaning bridge
     
-### End Product Demos
+### Overview [Note 1](../notes/LASI-1.json)
 
-- [Academic Writing Analytics (AWA)](http://awa.uts.edu.au)
-- [Learner Metacognition](http://nlytx.io/2016/metacognition/index.html)
-
-
-## Digging deeper 
-
-### Zeppelin basics [Note 01](../notes/01_Basics)
-
-- Tour of GitHub and workshop resources
-    * using the workbooks  - or not
-    * work in the language you prefer - or try a new one
-    
+- The process from data to learner
+- High level overview
+- Big picture before deep diving in next session
 - Workshop approach - working through both processes
     * pedagogical processes 
     * technical processes 
@@ -52,18 +38,10 @@
     * thoughts on accuracy and precision
     * thoughts on evaluation
 
-### Text Wrangling [Note 01](../notes/02_TextWrangling)    
+### Example Product Demos
 
-- cleaning: why is this non-trivial?
-
-- unstructured to structured
-    * chunking
-    * tokenising
-    * multiple approaches may be needed depending on what is ahead (i.e. different algorithms need different text input)
-    
-- bridge building    
-    * what are the implications for pedagogy?
-    * what does the theory say?
+- [Academic Writing Analytics (AWA)](http://awa.uts.edu.au)
+- [Learner Metacognition](http://nlytx.io/2016/metacognition/index.html)
     
     
 [SESSION 2 >>](./lasi17-waw-2.md)

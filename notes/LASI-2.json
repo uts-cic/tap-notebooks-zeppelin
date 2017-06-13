@@ -1,0 +1,1021 @@
+﻿{
+	"paragraphs": [
+		{
+			"title": "Setup",
+			"text": "//IMPORT LIBRARIES\n\nimport org.apache.commons.math3.stat.descriptive._\nimport java.io._\nimport scala.io.Source\nimport scalaj.http._    // to manage http connection to TAP\nimport org.json4s._     // to serialise and deserialise JSON\n\n\n//CREATE CLASSES, OBJECTS AND TYPES\n\ncase class Message(message:String)\ncase class Result[T](message:String,results:T)\ncase class Tags(lemmas:List[String] = List(),posTags:List[String] = List())\ncase class Sentence(text:String,tokens:List[String],tags:Tags = Tags())\ncase class Section(sentences:List[Sentence])\ncase class Document(sections:List[Section])\ntype Vocab = Map[String,List[String]]\n  \ncase class DisplayPhrase(text:String,style:String)\ncase class DisplaySection(text:String,phrases:List[DisplayPhrase])\ncase class DisplayDoc(title:String,sections:List[DisplaySection])\n\n//The TapIO class\ncase class TapIO(server:String = \"http://localhost:8080\") {\n    \n    //Import some helper libraries\n   import scalaj.http._\nimport org.json4s._\n    import org.json4s.jackson.Serialization\n    import org.json4s.jackson.Serialization.{read, write}\n    \n    implicit val defaultFormats = Serialization.formats(NoTypeHints)\n    \n    val API_VERSION = \"v1\"\n    lazy val API_URL = server+\"/\"+API_VERSION\n    lazy val HEALTH_URL = API_URL+\"/health\"\n    lazy val CLEAN_URL = API_URL+\"/analyse/text/clean\"\n    lazy val STRUCTURE_URL = API_URL+\"/analyse/text/structure\"\n    lazy val VOCAB_URL = API_URL+\"/analyse/text/vocab\"\n    \n    def serverDetails = Http(API_URL).asString\n\n    def getHealthMessage(debug:Boolean = false) = {\n        println(s\"Connecting to $HEALTH_URL\")\n        val response = Http(HEALTH_URL).asString\n        if(debug) println(response)\n        read[Message](response.body)\n    }\n\n    def serverIsHealthy = {\n        try { getHealthMessage().message==\"ok\" }\n        catch { case e:Exception => {\n                println(s\"There was a problem with the server: $e\")\n                false }\n        }\n    }\n    \n    def cleanText(text:String) = {\n    //println(s\"Cleaning text: $text\")\n    val response = Http(CLEAN_URL).postData(text).header(\"content-type\", \"application/json\").asString\n    //println(response)\n    read[Result[List[String]]](response.body)\n  }\n\n  def getStructure(text:String) = {\n    //println(s\"Getting structure for text: $text\")\n    val response = Http(STRUCTURE_URL).postData(text).header(\"content-type\", \"application/json\").asString\n    //println(response)\n    read[Result[Document]](response.body)\n  }\n  \n  def getVocab(text:String) = {\n    //println(s\"Getting structure for text: $text\")\n    val response = Http(VOCAB_URL).postData(text).header(\"content-type\", \"application/json\").asString\n    //println(response.body)\n    read[Result[Vocab]](response.body) \n  }\n}\n\nval tapServer = TapIO(\"https://b9yiddda69.execute-api.ap-southeast-2.amazonaws.com/lasi\")\n//val tapServer = TapIO()\n\n\n\n//Define functions\n\n/*********************************\n* getFile\n*********************************/\ndef getFile(fname:String,user:String=\"master\",localPath:String=\"/home/ec2-user/data\"):String = {\n    val file = new File(localPath+\"/\"+fname)\n    file.getParentFile.mkdirs\n    try {\n        if (!file.exists) {\n        //println(\"Getting from S3\")\n         val response = Http(s\"http://lasi-working-files.s3-website-ap-southeast-2.amazonaws.com/$user/$fname\").asString\n         if (response.code!=200) throw new Exception(\"Cannot get file from S3\")\n         //println(\"Saving to local directory\")\n         val bw = new BufferedWriter(new FileWriter(file))\n            bw.write(response.body)\n            bw.close()\n    }\n    //println(\"Getting from local directory\")\n    Source.fromFile(file).getLines.mkString(\"\\n\") //Each line ends with a newline character, so put them back for string\n    } catch {\n        case e:Exception => {\n            println(s\"ERROR: There was a problem getting the file: $e\")\n            \"\"\n        }\n    }\n}\n\n/*********************************\n* saveAsFile\n*********************************/\ndef saveAsFile(contents:String,name:String,localPath:String=\"/home/ec2-user/data\") = {\n    try {\n        val file = new File(localPath+\"/\"+name)\n        val bw = new BufferedWriter(new FileWriter(file))\n        bw.write(contents)\n        bw.close()\n        true\n    } catch {\n        case e:Exception => {\n            println(\"ERROR: There was a problem saving the file: $e\")\n            false\n        }\n    }\n}\n\n/*********************************\n* displayStructure\n*********************************/\ndef displayStructure(document:Document) = {\n    document.sections.map { section =>\n        \"section\\t\\t\\t\\n\".+{\n            section.sentences.map { sentence =>\n                \"\\ttext: \"+ sentence.text + \"\\t\\t\\n\"+\n                \"\\ttokens: |\"+ sentence.tokens.mkString(\"|\")+\"|\\t\\n\"+\n                \"\\t\\tlemmas: |\"+ sentence.tags.lemmas.mkString(\"|\")+\"|\\n\"+\n                \"\\t\\tposTags: |\"+ sentence.tags.posTags.mkString(\"|\")+\"|\\n\"\n            }.mkString(\"\")\n        }\n    }.mkString(\"\")\n}\n\ndef descriptiveStats(xs:List[Int]) = new DescriptiveStatistics(xs.map(_.toDouble).toArray)\n\ndef markupSection(phrases:List[DisplayPhrase],markedUp:String=\"\"):String = {\n  if (phrases.isEmpty) markedUp\n  else {\n    val p = phrases.head\n    val newMarkedUp = markedUp.replace(p.text,s\"\"\"<span class=\"${p.style}\">${p.text}</span>\"\"\")\n    //Find matching text (no case)\n    //get sentence word\n    //Build replacement from sentence word (not token)\n    //Do the replacement\n    \n    markupSection(phrases.tail,newMarkedUp)\n  }\n}\n\ndef markup(doc:DisplayDoc) = {\n  println(s\"%angular <h3>${doc.title}</h3>\")\n  doc.sections.map( s => markupSection(s.phrases,s.text)).foreach { sec => \n      println(s\"<p>$sec<p>\")\n  }\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:38:02-0400",
+			"config": {
+				"editorSetting": {
+					"language": "scala"
+				},
+				"colWidth": 12,
+				"editorMode": "ace/mode/scala",
+				"editorHide": true,
+				"title": true,
+				"results": {
+				},
+				"enabled": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497312566639_-302499868",
+			"id": "20170613-042335_1891105030",
+			"dateCreated": "2017-06-13T10:09:26-0400",
+			"dateStarted": "2017-06-12T22:36:30-0400",
+			"dateFinished": "2017-06-12T22:36:41-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"focus": true,
+			"$$hashKey": "object:5293"
+		},
+		{
+			"title": "Discuss",
+			"text": "%md\n> Discuss this session online in the [LASI-17 Room](https://gitter.im/writing-analytics/LASI-17) of the Gitter [Writing Analytics Community](https://gitter.im/writing-analytics).",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:38:04-0400",
+			"config": {
+				"tableHide": false,
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"colWidth": 12,
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"title": true,
+				"results": {
+				},
+				"enabled": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497312566642_-291342150",
+			"id": "20170613-100731_991140834",
+			"dateCreated": "2017-06-13T10:09:26-0400",
+			"dateStarted": "2017-06-12T22:38:04-0400",
+			"dateFinished": "2017-06-12T22:38:04-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5294",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<blockquote>\n  <p>Discuss this session online in the <a href=\"https://gitter.im/writing-analytics/LASI-17\">LASI-17 Room</a> of the Gitter <a href=\"https://gitter.im/writing-analytics\">Writing Analytics Community</a>.</p>\n</blockquote>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"text": "%md\nIf you are new to coding and writing analytics, ignore the setup code (above) and use the example code below with the example text.\n\nIf you are experienced at coding, explore the setup code and try the existing example code with your own text, and/or or extend the code to do more with the example text.\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:38:09-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497317954485_589774164",
+			"id": "20170612-213914_2056459701",
+			"dateCreated": "2017-06-12T21:39:14-0400",
+			"dateStarted": "2017-06-12T22:38:09-0400",
+			"dateFinished": "2017-06-12T22:38:09-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5295",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<p>If you are new to coding and writing analytics, ignore the setup code (above) and use the example code below with the example text.</p>\n<p>If you are experienced at coding, explore the setup code and try the existing example code with your own text, and/or or extend the code to do more with the example text.</p>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"title": "Loading data",
+			"text": "//Load from S3\nval pharmText = getFile(\"pharm-sample.txt\")\n\n//Paste in your own doc\nval myDoc = z.input(\"My document:\").toString\nsaveAsFile(myDoc,\"myDoc2.txt\")",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:30-0400",
+			"config": {
+				"colWidth": 12,
+				"editorMode": "ace/mode/scala",
+				"results": {
+				},
+				"enabled": true,
+				"editorSetting": {
+					"language": "scala",
+					"editOnDblClick": false
+				},
+				"title": true
+			},
+			"settings": {
+				"params": {
+					"My document:": "This should be saved in my file"
+				},
+				"forms": {
+					"My document:": {
+						"name": "My document:",
+						"displayName": "My document:",
+						"type": "input",
+						"defaultValue": "",
+						"hidden": false,
+						"$$hashKey": "object:5977"
+					}
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497312566643_-291726899",
+			"id": "20170613-100817_2122616273",
+			"dateCreated": "2017-06-13T10:09:26-0400",
+			"dateStarted": "2017-06-12T22:36:31-0400",
+			"dateFinished": "2017-06-12T22:36:44-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5296"
+		},
+		{
+			"text": "val myDocFromFile = getFile(\"myDoc2.txt\",\"\")",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:42-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497315666732_-1823723687",
+			"id": "20170612-210106_1868166123",
+			"dateCreated": "2017-06-12T21:01:06-0400",
+			"dateStarted": "2017-06-12T22:36:42-0400",
+			"dateFinished": "2017-06-12T22:36:45-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5297"
+		},
+		{
+			"title": "Connecting to TAP",
+			"text": "println(tapServer.serverIsHealthy)",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:45-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497316524737_-745355425",
+			"id": "20170612-211524_167646705",
+			"dateCreated": "2017-06-12T21:15:24-0400",
+			"dateStarted": "2017-06-12T22:36:45-0400",
+			"dateFinished": "2017-06-12T22:36:46-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5298"
+		},
+		{
+			"text": "//To see the actual message back from the server\ntapServer.getHealthMessage(true)",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:45-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497316645066_-473753350",
+			"id": "20170612-211725_688421826",
+			"dateCreated": "2017-06-12T21:17:25-0400",
+			"dateStarted": "2017-06-12T22:36:45-0400",
+			"dateFinished": "2017-06-12T22:36:48-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5299"
+		},
+		{
+			"title": "Cleaning text",
+			"text": "%md\n- why is cleaning necessary?\n- why is cleaning a non-trivial task?\n- what are the dangers in the cleaning process?\n- How much control can you have over input?\n- How to interact with other systems, with large range of encodings and protocols?\n- What level of cleaning is needed for various algorithms?\n- Sometimes non-alphanumeric characters hold meaning (think lists, headings, section breaks). What to do?",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:38:25-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"title": true,
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497312921310_-2061433922",
+			"id": "20170613-101521_1221599623",
+			"dateCreated": "2017-06-13T10:15:21-0400",
+			"dateStarted": "2017-06-12T22:38:25-0400",
+			"dateFinished": "2017-06-12T22:38:25-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5300",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<ul>\n  <li>why is cleaning necessary?</li>\n  <li>why is cleaning a non-trivial task?</li>\n  <li>what are the dangers in the cleaning process?</li>\n  <li>How much control can you have over input?</li>\n  <li>How to interact with other systems, with large range of encodings and protocols?</li>\n  <li>What level of cleaning is needed for various algorithms?</li>\n  <li>Sometimes non-alphanumeric characters hold meaning (think lists, headings, section breaks). What to do?</li>\n</ul>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"title": "C¢¶£§le∆˙©an §••–me˙˚˙©\\n\\npl•§ea£¢¬˙se",
+			"text": "tapServer.cleanText(\"C¢¶£§le∆˙©an §••–me˙˚˙©\\n\\npl•§ea£¢¬˙se\").results",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:47-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true,
+				"editorHide": false,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497316928231_-2013688658",
+			"id": "20170612-212208_919612643",
+			"dateCreated": "2017-06-12T21:22:08-0400",
+			"dateStarted": "2017-06-12T22:36:47-0400",
+			"dateFinished": "2017-06-12T22:36:49-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5301"
+		},
+		{
+			"text": "%md\nLet's clean something more substantial - the 'pharmText' file that we loaded earlier... ",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:38:32-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497317042717_129298129",
+			"id": "20170612-212402_1214446449",
+			"dateCreated": "2017-06-12T21:24:02-0400",
+			"dateStarted": "2017-06-12T22:38:32-0400",
+			"dateFinished": "2017-06-12T22:38:32-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5302",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<p>Let&rsquo;s clean something more substantial - the &lsquo;pharmText&rsquo; file that we loaded earlier&hellip;</p>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"text": "val cleanedText = tapServer.cleanText(pharmText).results",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:48-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497317051670_68339237",
+			"id": "20170612-212411_1342066028",
+			"dateCreated": "2017-06-12T21:24:11-0400",
+			"dateStarted": "2017-06-12T22:36:48-0400",
+			"dateFinished": "2017-06-12T22:36:51-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5303"
+		},
+		{
+			"text": "%md\nthe `cleanText` function is giving us a list back rather than a string. Let's explore this a little...",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:38:39-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497317264969_-71806765",
+			"id": "20170612-212744_1769290860",
+			"dateCreated": "2017-06-12T21:27:44-0400",
+			"dateStarted": "2017-06-12T22:38:39-0400",
+			"dateFinished": "2017-06-12T22:38:39-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5304",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<p>the <code>cleanText</code> function is giving us a list back rather than a string. Let&rsquo;s explore this a little&hellip;</p>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"text": "//How many items in the list?\ncleanedText.length\n\n//Modify the pharmText to create spaces between paragraphs and try again...\nval cleanedText2 = tapServer.cleanText(pharmText.replace(\"\\n\",\"\\n\\n\")).results\n\n//How many items this time?\ncleanedText2.length",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:49-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497317221898_-712054126",
+			"id": "20170612-212701_333547304",
+			"dateCreated": "2017-06-12T21:27:01-0400",
+			"dateStarted": "2017-06-12T22:36:49-0400",
+			"dateFinished": "2017-06-12T22:36:54-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5305"
+		},
+		{
+			"text": "%md\nwhat about the changes that cleaning makes?",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:38:42-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497317599233_-940293946",
+			"id": "20170612-213319_1901139606",
+			"dateCreated": "2017-06-12T21:33:19-0400",
+			"dateStarted": "2017-06-12T22:38:42-0400",
+			"dateFinished": "2017-06-12T22:38:42-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5306",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<p>what about the changes that cleaning makes?</p>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"text": "//Differences\n{\n    println(\"length of clean text: \"+cleanedText.head.length)\n    println(\"length of original text: \"+pharmText.length)\n    val cleanSet = cleanedText.head.toList.toSet\n    val origSet = pharmText.toList.toSet\n    val removed = origSet.diff(cleanSet).map(c =>  \"\\\\u%04X\".format(c.toInt))\n    println(\"Characters removed: \"+removed.mkString(\", \"))\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:52-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497317606701_-897571494",
+			"id": "20170612-213326_2142053051",
+			"dateCreated": "2017-06-12T21:33:26-0400",
+			"dateStarted": "2017-06-12T22:36:52-0400",
+			"dateFinished": "2017-06-12T22:36:55-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5307"
+		},
+		{
+			"title": "Structure",
+			"text": "%md\n- chunking\n- tokenising\n- multiple approaches may be needed depending on what is ahead (i.e. different algorithms need different text input)",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:38:45-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"title": true,
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497312941648_1755305815",
+			"id": "20170613-101541_1519350929",
+			"dateCreated": "2017-06-13T10:15:41-0400",
+			"dateStarted": "2017-06-12T22:38:45-0400",
+			"dateFinished": "2017-06-12T22:38:45-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5308",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<ul>\n  <li>chunking</li>\n  <li>tokenising</li>\n  <li>multiple approaches may be needed depending on what is ahead (i.e. different algorithms need different text input)</li>\n</ul>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"text": "val document = tapServer.getStructure(\"Hello, this is a test for structure.\\n\\nThis should be a new section.\\n\\nAnd this should be the final section.\").results\n\ndef displayStructure(document:Document) = {\n    document.sections.map { section =>\n        \"section\\t\\t\\t\\n\".+{\n            section.sentences.map { sentence =>\n                \"\\ttext: \"+ sentence.text + \"\\t\\t\\n\"+\n                \"\\ttokens: |\"+ sentence.tokens.mkString(\"|\")+\"|\\t\\n\"+\n                \"\\t\\tlemmas: |\"+ sentence.tags.lemmas.mkString(\"|\")+\"|\\n\"+\n                \"\\t\\tposTags: |\"+ sentence.tags.posTags.mkString(\"|\")+\"|\\n\"\n            }.mkString(\"\")\n        }\n    }.mkString(\"\")\n}\n\nval structure = displayStructure(document)",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:54-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497318300648_613104809",
+			"id": "20170612-214500_604555380",
+			"dateCreated": "2017-06-12T21:45:00-0400",
+			"dateStarted": "2017-06-12T22:36:54-0400",
+			"dateFinished": "2017-06-12T22:36:58-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5309"
+		},
+		{
+			"text": "println(s\"\"\"%table SECTION\\tSENTENCE\\tTAG\\n $structure\"\"\")",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:55-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497318306327_863591667",
+			"id": "20170612-214506_469507097",
+			"dateCreated": "2017-06-12T21:45:06-0400",
+			"dateStarted": "2017-06-12T22:36:55-0400",
+			"dateFinished": "2017-06-12T22:36:59-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5310"
+		},
+		{
+			"text": "val doc = tapServer.getStructure(pharmText.replace(\"\\n\",\"\\n\\n\")).results",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:58-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497318308326_1955509046",
+			"id": "20170612-214508_485354147",
+			"dateCreated": "2017-06-12T21:45:08-0400",
+			"dateStarted": "2017-06-12T22:36:58-0400",
+			"dateFinished": "2017-06-12T22:37:01-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5311"
+		},
+		{
+			"text": "{\n    val structure = displayStructure(doc)\n    println(s\"\"\"%table SECTION\\tSENTENCE\\tTAG\\n $structure\"\"\")\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:59-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497318321626_-2006235055",
+			"id": "20170612-214521_102189781",
+			"dateCreated": "2017-06-12T21:45:21-0400",
+			"dateStarted": "2017-06-12T22:36:59-0400",
+			"dateFinished": "2017-06-12T22:37:02-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5312"
+		},
+		{
+			"text": "%md\nThe structure of the document is hard-coded into the software:\n\n```scala\ncase class Tags( lemmas:List[String] = List(), posTags:List[String] = List() )\ncase class Sentence( text:String, tokens:List[String], tags:Tags = Tags() )\ncase class Section( sentences:List[Sentence] )\ncase class Document( sections:List[Section] )\n```\n\nThis allows us to access elements of the document in a structured way. For example...\n\n```scala\ndoc.sections(1).sentences(2).text\ndoc.sections(1).sentences(2).tags.posTags.filter(\"NN\").length\n```\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:36:33-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": false,
+				"tableHide": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497318841146_-1269120748",
+			"id": "20170612-215401_813483623",
+			"dateCreated": "2017-06-12T21:54:01-0400",
+			"dateStarted": "2017-06-12T22:36:33-0400",
+			"dateFinished": "2017-06-12T22:36:33-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5313"
+		},
+		{
+			"title": "POS structure",
+			"text": "//What is the 3rd sentence of the 2nd section? (Note that lists and arrays start at 0)\nval sentence = doc.sections(1).sentences(2)\nprintln(sentence.text)\n\n//Does this sentence contain a modal verb?\nval posTags =  sentence.tags.posTags.filter(_.contains(\"MD\")).nonEmpty\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:37:02-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497319327933_-1867652119",
+			"id": "20170612-220207_1018208643",
+			"dateCreated": "2017-06-12T22:02:07-0400",
+			"dateStarted": "2017-06-12T22:37:02-0400",
+			"dateFinished": "2017-06-12T22:37:04-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5314"
+		},
+		{
+			"text": "//Show all sentences with modal verbs\n{\nval modalSents = doc.sections.flatMap(sec=> sec.sentences.filter(sent => sent.tags.posTags.filter(_.contains(\"MD\")).nonEmpty).map(_.text))\n\nmodalSents.foreach(println(_))\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:37:02-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497320518819_-1008439426",
+			"id": "20170612-222158_400142367",
+			"dateCreated": "2017-06-12T22:21:58-0400",
+			"dateStarted": "2017-06-12T22:37:02-0400",
+			"dateFinished": "2017-06-12T22:37:05-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5315"
+		},
+		{
+			"title": "Try yourself",
+			"text": "%md\n* Answer other questions about the example text by using the structure\n* How can we relate particular parts of speech with particular words?\n* What do parts of speech give us in addition to the parsed structure?",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:38:56-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"title": true,
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497312951819_-592816722",
+			"id": "20170613-101551_153309703",
+			"dateCreated": "2017-06-13T10:15:51-0400",
+			"dateStarted": "2017-06-12T22:38:56-0400",
+			"dateFinished": "2017-06-12T22:38:56-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5316",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<ul>\n  <li>Answer other questions about the example text by using the structure</li>\n  <li>How can we relate particular parts of speech with particular words?</li>\n  <li>What do parts of speech give us in addition to the parsed structure?</li>\n</ul>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"text": "//try your own questions\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:37:55-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/scala",
+				"editorHide": false,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497321311235_563794532",
+			"id": "20170612-223511_1620019003",
+			"dateCreated": "2017-06-12T22:35:11-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:5317",
+			"dateFinished": "2017-06-12T22:37:49-0400",
+			"dateStarted": "2017-06-12T22:37:49-0400",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+
+				]
+			}
+		},
+		{
+			"user": "admin",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497321469030_-1094478684",
+			"id": "20170612-223749_888288598",
+			"dateCreated": "2017-06-12T22:37:49-0400",
+			"status": "READY",
+			"progressUpdateIntervalMs": 500,
+			"focus": true,
+			"$$hashKey": "object:6696"
+		}
+	],
+	"name": "LASI-2",
+	"id": "2CMED6K71",
+	"angularObjects": {
+		"2CHGWK3QR:shared_process": [
+
+		],
+		"2CGJUBZ7V:shared_process": [
+
+		],
+		"2CFA6A5V1:shared_process": [
+
+		],
+		"2CEG2J2DN:shared_process": [
+
+		],
+		"2CEHG1843:shared_process": [
+
+		],
+		"2CFKZEYRE:shared_process": [
+
+		],
+		"2CHBDJGUA:shared_process": [
+
+		]
+	},
+	"config": {
+		"looknfeel": "default",
+		"personalizedMode": "false"
+	},
+	"info": {
+	}
+}

@@ -1,0 +1,1180 @@
+﻿{
+	"paragraphs": [
+		{
+			"title": "Setup",
+			"text": "//IMPORT LIBRARIES\nimport org.apache.commons.math3.stat.descriptive._\n\n//CREATE CLASSES, OBJECTS AND TYPES\n\ncase class Message(message:String)\ncase class Result[T](message:String,results:T)\ncase class Tags(lemmas:List[String] = List(),posTags:List[String] = List())\ncase class Sentence(text:String,tokens:List[String],tags:Tags = Tags())\ncase class Section(sentences:List[Sentence])\ncase class Document(sections:List[Section])\ntype Vocab = Map[String,List[String]]\n  \ncase class DisplayPhrase(text:String,style:String)\ncase class DisplaySection(text:String,phrases:List[DisplayPhrase])\ncase class DisplayDoc(title:String,sections:List[DisplaySection])\n\n//The TapIO class\ncase class TapIO(server:String = \"http://localhost:8080\") {\n    \n    //Import some helper libraries\n    import scalaj.http._    // to manage http connection to TAP\n    import org.json4s._     // to serialise and deserialise JSON\n    import org.json4s.jackson.Serialization\n    import org.json4s.jackson.Serialization.{read, write}\n    \n    implicit val defaultFormats = Serialization.formats(NoTypeHints)\n    \n    val API_VERSION = \"v1\"\n    lazy val API_URL = server+\"/\"+API_VERSION\n    lazy val HEALTH_URL = API_URL+\"/health\"\n    lazy val CLEAN_URL = API_URL+\"/analyse/text/clean\"\n    lazy val STRUCTURE_URL = API_URL+\"/analyse/text/structure\"\n    lazy val VOCAB_URL = API_URL+\"/analyse/text/vocab\"\n    \n    def serverDetails = Http(API_URL).asString\n\n    def getHealthMessage(debug:Boolean = false) = {\n        println(s\"Connecting to $HEALTH_URL\")\n        val response = Http(HEALTH_URL).asString\n        if(debug) println(response)\n        read[Message](response.body)\n    }\n\n    def serverIsHealthy = {\n        try { getHealthMessage().message==\"ok\" }\n        catch { case e:Exception => {\n                println(s\"There was a problem with the server: $e\")\n                false }\n        }\n    }\n    \n    def cleanText(text:String) = {\n    //println(s\"Cleaning text: $text\")\n    val response = Http(CLEAN_URL).postData(text).header(\"content-type\", \"application/json\").asString\n    //println(response)\n    read[Result[List[String]]](response.body)\n  }\n\n  def getStructure(text:String) = {\n    //println(s\"Getting structure for text: $text\")\n    val response = Http(STRUCTURE_URL).postData(text).header(\"content-type\", \"application/json\").asString\n    //println(response)\n    read[Result[Document]](response.body)\n  }\n  \n  def getVocab(text:String) = {\n    //println(s\"Getting structure for text: $text\")\n    val response = Http(VOCAB_URL).postData(text).header(\"content-type\", \"application/json\").asString\n    //println(response.body)\n    read[Result[Vocab]](response.body) \n  }\n}\n\nval tapServer = TapIO(\"https://b9yiddda69.execute-api.ap-southeast-2.amazonaws.com/lasi\")\n//val tapServer = TapIO()\n\n\n\n//Define functions\n\n/*********************************\n* getFile\n*********************************/\ndef getFile(fname:String,user:String=\"master\",localPath:String=\"/Users/andrew/data\"):String = {\n    import java.io._\n    val file = new File(localPath+\"/\"+fname)\n    file.getParentFile.mkdirs\n    try {\n        if (!file.exists) {\n        //println(\"Getting from S3\")\n         import scalaj.http._\n         val response = Http(s\"http://lasi-working-files.s3-website-ap-southeast-2.amazonaws.com/$user/$fname\").asString\n         if (response.code!=200) throw new Exception(\"Cannot get file from S3\")\n         //println(\"Saving to local directory\")\n         val bw = new BufferedWriter(new FileWriter(file))\n            bw.write(response.body)\n            bw.close()\n    }\n    //println(\"Getting from local directory\")\n    Source.fromFile(file).getLines.mkString(\"\\n\") //Each line ends with a newline character, so put them back for string\n    } catch {\n        case e:Exception => {\n            println(s\"ERROR: There was a problem getting the file: $e\")\n            \"\"\n        }\n    }\n}\n\n/*********************************\n* displayStructure\n*********************************/\ndef displayStructure(document:Document) = {\n    document.sections.map { section =>\n        \"section\\t\\t\\t\\n\".+{\n            section.sentences.map { sentence =>\n                \"\\ttext: \"+ sentence.text + \"\\t\\t\\n\"+\n                \"\\ttokens: |\"+ sentence.tokens.mkString(\"|\")+\"|\\t\\n\"+\n                \"\\t\\tlemmas: |\"+ sentence.tags.lemmas.mkString(\"|\")+\"|\\n\"+\n                \"\\t\\tposTags: |\"+ sentence.tags.posTags.mkString(\"|\")+\"|\\n\"\n            }.mkString(\"\")\n        }\n    }.mkString(\"\")\n}\n\ndef descriptiveStats(xs:List[Int]) = new DescriptiveStatistics(xs.map(_.toDouble).toArray)\n\ndef markupSection(phrases:List[DisplayPhrase],markedUp:String=\"\"):String = {\n  if (phrases.isEmpty) markedUp\n  else {\n    val p = phrases.head\n    val newMarkedUp = markedUp.replace(p.text,s\"\"\"<span class=\"${p.style}\">${p.text}</span>\"\"\")\n    //Find matching text (no case)\n    //get sentence word\n    //Build replacement from sentence word (not token)\n    //Do the replacement\n    \n    markupSection(phrases.tail,newMarkedUp)\n  }\n}\n\ndef markup(doc:DisplayDoc) = {\n  println(s\"%angular <h3>${doc.title}</h3>\")\n  doc.sections.map( s => markupSection(s.phrases,s.text)).foreach { sec => \n      println(s\"<p>$sec<p>\")\n  }\n}\n\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:50-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true,
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496875380519_-2066492832",
+			"id": "20170608-084300_348995538",
+			"dateCreated": "2017-06-08T08:43:00-0400",
+			"dateStarted": "2017-06-12T22:47:50-0400",
+			"dateFinished": "2017-06-12T22:47:59-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"focus": true,
+			"$$hashKey": "object:3875"
+		},
+		{
+			"text": "%md\n> Discuss this session online in the [LASI-17 Room](https://gitter.im/writing-analytics/LASI-17) of the Gitter [Writing Analytics Community](https://gitter.im/writing-analytics).",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:50-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497148389485_783012430",
+			"id": "20170611-123309_2102173749",
+			"dateCreated": "2017-06-11T12:33:09-0400",
+			"dateStarted": "2017-06-12T22:47:50-0400",
+			"dateFinished": "2017-06-12T22:47:50-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3876",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<blockquote>\n  <p>Discuss this session online in the <a href=\"https://gitter.im/writing-analytics/LASI-17\">LASI-17 Room</a> of the Gitter <a href=\"https://gitter.im/writing-analytics\">Writing Analytics Community</a>.</p>\n</blockquote>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"title": "Writing Analytics' problem",
+			"text": "%md\nA fundamental problem for Writing Analytics (WA) - and often LA in general - involves finding a path that connects **low level** computational data and **high level** meaning for the user (usually the student or the teacher). \n\nFor **WA**, we are looking for a path from the representation of a learners writing to analytics capable of providing meaningful insight into the learning context. At the lowest level the text can be seen as the computational equivalent of the student's writing. But we are actually interested in finding a relation  between **analytics** and **learning**. \n\nWhen working with **text analytics**, we are in a computational domain, and can lose sight of what is required for meaningful learning. \n\nWhen working with **writing** for **learning** (or learning to write), we are in a pedagogical domain, and can easily misunderstand the computational requirements for the generation of useful analytics.\n\n**IMPORTANT:** A connection between the writing and the text connect does not necessarily result in a connection between analytics and learning.\n\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:50-0400",
+			"config": {
+				"colWidth": 7,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false,
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496875394436_-310083454",
+			"id": "20170608-084314_271570655",
+			"dateCreated": "2017-06-08T08:43:14-0400",
+			"dateStarted": "2017-06-12T22:47:51-0400",
+			"dateFinished": "2017-06-12T22:47:51-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3877",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<p>A fundamental problem for Writing Analytics (WA) - and often LA in general - involves finding a path that connects <strong>low level</strong> computational data and <strong>high level</strong> meaning for the user (usually the student or the teacher). </p>\n<p>For <strong>WA</strong>, we are looking for a path from the representation of a learners writing to analytics capable of providing meaningful insight into the learning context. At the lowest level the text can be seen as the computational equivalent of the student&rsquo;s writing. But we are actually interested in finding a relation between <strong>analytics</strong> and <strong>learning</strong>. </p>\n<p>When working with <strong>text analytics</strong>, we are in a computational domain, and can lose sight of what is required for meaningful learning. </p>\n<p>When working with <strong>writing</strong> for <strong>learning</strong> (or learning to write), we are in a pedagogical domain, and can easily misunderstand the computational requirements for the generation of useful analytics.</p>\n<p><strong>IMPORTANT:</strong> A connection between the writing and the text connect does not necessarily result in a connection between analytics and learning.</p>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"text": "%md\n![](/assets/images/WritingAnalyticsModel.png)",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:51-0400",
+			"config": {
+				"colWidth": 5,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497148412320_-693238452",
+			"id": "20170611-123332_251458339",
+			"dateCreated": "2017-06-11T12:33:32-0400",
+			"dateStarted": "2017-06-12T22:47:51-0400",
+			"dateFinished": "2017-06-12T22:47:51-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3878",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<p><img src=\"/assets/images/WritingAnalyticsModel.png\" /></p>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"title": "Loading data",
+			"text": "//Load news example from S3\nval pharmText = getFile(\"pharm-sample.txt\")\n\n//Display first 1475 characters",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:52:56-0400",
+			"config": {
+				"colWidth": 4,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true,
+				"tableHide": true,
+				"editorHide": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496875442219_1376548454",
+			"id": "20170608-084402_881409815",
+			"dateCreated": "2017-06-08T08:44:02-0400",
+			"dateStarted": "2017-06-12T22:49:05-0400",
+			"dateFinished": "2017-06-12T22:49:06-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3879"
+		},
+		{
+			"text": "print(pharmText.take(1475))",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:53:52-0400",
+			"config": {
+				"colWidth": 8,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/scala",
+				"editorHide": true,
+				"tableHide": true,
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496893008106_514869764",
+			"id": "20170608-133648_932529861",
+			"dateCreated": "2017-06-08T13:36:48-0400",
+			"dateStarted": "2017-06-12T22:48:00-0400",
+			"dateFinished": "2017-06-12T22:48:01-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3880",
+			"title": "Raw data"
+		},
+		{
+			"title": "Display a document",
+			"text": "//Bind the data to the display system\n//Display first 2 paragraphs\n\nz.angularBind(\"docText\",pharmText.split(\"\\n\").take(2))\nz.angularBind(\"docTitle\",\"Example document\")",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:52:59-0400",
+			"config": {
+				"colWidth": 4,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true,
+				"editorHide": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496893334611_969534050",
+			"id": "20170608-134214_1908840802",
+			"dateCreated": "2017-06-08T13:42:14-0400",
+			"dateStarted": "2017-06-12T22:52:02-0400",
+			"dateFinished": "2017-06-12T22:52:03-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3881"
+		},
+		{
+			"text": "%angular\n<h4>{{docTitle}}</h4>\n<div ng-repeat=\"section in docText\">\n    <p>{{section}}</p>\n</div>",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:53:53-0400",
+			"config": {
+				"colWidth": 8,
+				"enabled": true,
+				"results": {
+					"0": {
+						"graph": {
+							"mode": "table",
+							"height": 480.6521911621094,
+							"optionOpen": false
+						}
+					}
+				},
+				"editorSetting": {
+					"language": "scala",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/undefined",
+				"editorHide": true,
+				"tableHide": true,
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496892218592_1910232552",
+			"id": "20170608-132338_1305450849",
+			"dateCreated": "2017-06-08T13:23:38-0400",
+			"dateStarted": "2017-06-12T22:52:12-0400",
+			"dateFinished": "2017-06-12T22:52:12-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3882",
+			"title": "Formatted doc"
+		},
+		{
+			"title": "Analytics with learning in mind",
+			"text": "%md\n* In what ways is the *displayed document* different to the *raw text*?\n* What needed to happen computationally in order to present the user with a meaningful view?\n* How can we take a learner centred critical view of computational processes?",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:49:28-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false,
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496876034452_-1796829302",
+			"id": "20170608-085354_970164991",
+			"dateCreated": "2017-06-08T08:53:54-0400",
+			"dateStarted": "2017-06-12T22:49:28-0400",
+			"dateFinished": "2017-06-12T22:49:28-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3883",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<ul>\n  <li>In what ways is the <em>displayed document</em> different to the <em>raw text</em>?</li>\n  <li>What needed to happen computationally in order to present the user with a meaningful view?</li>\n  <li>How can we take a learner centred critical view of computational processes?</li>\n</ul>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"title": "Cleaning the data",
+			"text": "// Clean the document\nval cleanText = {\n    val cleanText:String = tapServer.cleanText(pharmText).results.head\n    println(\"length of clean text: \"+cleanText.length)\n    println(\"length of original text: \"+pharmText.length)\n    val cleanSet = cleanText.toList.toSet\n    val origSet = pharmText.toList.toSet\n    val removed = origSet.diff(cleanSet).map(c =>  \"\\\\u%04X\".format(c.toInt))\n    println(\"Characters removed: \"+removed.mkString(\", \"))\n    println(\"-------------------------------------------- \")\n    cleanText\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:51-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+					"0": {
+						"graph": {
+							"mode": "table",
+							"height": 158.08424377441406,
+							"optionOpen": false
+						}
+					}
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true,
+				"editorHide": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496875494500_-1094046827",
+			"id": "20170608-084454_2026598953",
+			"dateCreated": "2017-06-08T08:44:54-0400",
+			"dateStarted": "2017-06-12T22:48:01-0400",
+			"dateFinished": "2017-06-12T22:48:04-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3884"
+		},
+		{
+			"title": "...with consequences",
+			"text": "%md\n* What should we keep, what should we throw away?\n* Why clean at all?\n* Why do we need to understand both the cleaning algorithms *and* the learning task?",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:51-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false,
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496876097894_1207933726",
+			"id": "20170608-085457_1222199090",
+			"dateCreated": "2017-06-08T08:54:57-0400",
+			"dateStarted": "2017-06-12T22:47:51-0400",
+			"dateFinished": "2017-06-12T22:47:51-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3885",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<ul>\n  <li>What should we keep, what should we throw away?</li>\n  <li>Why clean at all?</li>\n  <li>Why do we need to understand both the cleaning algorithms <em>and</em> the learning task?</li>\n</ul>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"title": "Unstructured to structured",
+			"text": "\nval doc = tapServer.getStructure(pharmText.replace(\"\\n\",\"\\n\\n\")).results",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:51-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true,
+				"editorHide": false,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497155404956_-448456376",
+			"id": "20170611-143004_1620496370",
+			"dateCreated": "2017-06-11T14:30:04-0400",
+			"dateStarted": "2017-06-12T22:48:02-0400",
+			"dateFinished": "2017-06-12T22:48:06-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3886"
+		},
+		{
+			"title": "",
+			"text": "{\n    val structure = displayStructure(doc)\n    println(s\"\"\"%table SECTION\\tSENTENCE\\tTAG\\n $structure\"\"\")\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:54:35-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": false,
+				"editorHide": false,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496875522385_128331077",
+			"id": "20170608-084522_101574115",
+			"dateCreated": "2017-06-08T08:45:22-0400",
+			"dateStarted": "2017-06-12T22:48:04-0400",
+			"dateFinished": "2017-06-12T22:48:07-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3887"
+		},
+		{
+			"title": "Is there a correct structure?",
+			"text": "%md\n* Is there a ***correct*** structure for a document?\n* What makes a sentence or a word?\n* What about other structural elements (like lists, tables, diagrams)?\n* How can we know text is a collection, document, section?\n* Any thoughts about accuracy and *gold standards*?",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:51-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false,
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496876221394_-1172706934",
+			"id": "20170608-085701_484560868",
+			"dateCreated": "2017-06-08T08:57:01-0400",
+			"dateStarted": "2017-06-12T22:47:51-0400",
+			"dateFinished": "2017-06-12T22:47:51-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3888",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<ul>\n  <li>Is there a <strong><em>correct</em></strong> structure for a document?</li>\n  <li>What makes a sentence or a word?</li>\n  <li>What about other structural elements (like lists, tables, diagrams)?</li>\n  <li>How can we know text is a collection, document, section?</li>\n  <li>Any thoughts about accuracy and <em>gold standards</em>?</li>\n</ul>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"title": "Vocabulary - the words being used",
+			"text": "val docVocab = tapServer.getVocab(pharmText).results\n{\n    val display = docVocab.map { vocab =>\n        val words = vocab._2.mkString(\" \")\n        s\"${vocab._1}\\t$words\"\n    }.mkString(\"\\n\")\nprintln(s\"\"\"%table OCCURENCES\\tWORDS\\n $display\"\"\")\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:49:48-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/scala",
+				"editorHide": true,
+				"tableHide": false,
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496909861245_-1389887330",
+			"id": "20170608-181741_564241107",
+			"dateCreated": "2017-06-08T18:17:41-0400",
+			"dateStarted": "2017-06-12T22:49:48-0400",
+			"dateFinished": "2017-06-12T22:49:51-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3889"
+		},
+		{
+			"title": "Occurrence pattern",
+			"text": "{\n    val display = docVocab.toList.map(v => v._1.toInt -> v._2).sortBy(_._1).map { vocab =>\n        val words = vocab._2.mkString(\" \")\n        s\"${vocab._1}\\t$words\"\n    }.mkString(\"\\n\")\n    \n    println(s\"\"\"%table OCCURENCES\\tTOKENS\\n $display\"\"\")\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:49:55-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true,
+				"editorHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497152050878_-1289115157",
+			"id": "20170611-133410_376688338",
+			"dateCreated": "2017-06-11T13:34:10-0400",
+			"dateStarted": "2017-06-12T22:49:55-0400",
+			"dateFinished": "2017-06-12T22:49:55-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3890"
+		},
+		{
+			"title": "as a graph",
+			"text": "{\n    val display = docVocab.toList.map(v => v._1.toInt -> v._2.length).sortBy(_._1).map { vocab =>\n        s\"${vocab._1}\\t${vocab._2}\"\n    }.mkString(\"\\n\")\n    \n    println(s\"\"\"%table OCCURENCES\\tTOKEN COUNT\\n $display\"\"\")\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:52-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+					"0": {
+						"graph": {
+							"mode": "multiBarChart",
+							"height": 300,
+							"optionOpen": false,
+							"setting": {
+								"stackedAreaChart": {
+									"style": "stack"
+								},
+								"multiBarChart": {
+									"stacked": true
+								},
+								"lineChart": {
+									"lineWithFocus": false,
+									"forceY": false
+								}
+							},
+							"commonSetting": {
+							},
+							"keys": [
+								{
+									"name": "OCCURENCES",
+									"index": 0,
+									"aggr": "sum"
+								}
+							],
+							"groups": [
+
+							],
+							"values": [
+								{
+									"name": "TOKEN COUNT",
+									"index": 1,
+									"aggr": "sum"
+								}
+							]
+						},
+						"helium": {
+						}
+					}
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true,
+				"editorHide": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497152495185_-2146323671",
+			"id": "20170611-134135_469030504",
+			"dateCreated": "2017-06-11T13:41:35-0400",
+			"dateStarted": "2017-06-12T22:48:10-0400",
+			"dateFinished": "2017-06-12T22:48:11-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3891"
+		},
+		{
+			"title": "Meaning for learning",
+			"text": "%md\n* Can this simple metric tell us something about the students' writing?\n* How may this be meaningful to the student or to the teacher?\n* What other possibilities could take from vocabulary?",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:52-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"title": true,
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497153523508_371346128",
+			"id": "20170611-135843_1661589694",
+			"dateCreated": "2017-06-11T13:58:43-0400",
+			"dateStarted": "2017-06-12T22:47:52-0400",
+			"dateFinished": "2017-06-12T22:47:52-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3892",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<ul>\n  <li>Can this simple metric tell us something about the students&rsquo; writing?</li>\n  <li>How may this be meaningful to the student or to the teacher?</li>\n  <li>What other possibilities could take from vocabulary?</li>\n</ul>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"title": "Searching for a relation",
+			"text": "%md\nA key objective of WA is to find a relation that makes a **meaningful** connection between the analytics and the learning. In doing so, we enable a path from low representational features to higher level meaning.\n\nWe start with an intuition that pursuing a particular analytics in a particular way may result in something that is considered meaningful in the learning context. This is our **hypothesis**.",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:52-0400",
+			"config": {
+				"colWidth": 6,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"title": true,
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496876491438_2093040086",
+			"id": "20170608-090131_454310913",
+			"dateCreated": "2017-06-08T09:01:31-0400",
+			"dateStarted": "2017-06-12T22:47:52-0400",
+			"dateFinished": "2017-06-12T22:47:52-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3893",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<p>A key objective of WA is to find a relation that makes a <strong>meaningful</strong> connection between the analytics and the learning. In doing so, we enable a path from low representational features to higher level meaning.</p>\n<p>We start with an intuition that pursuing a particular analytics in a particular way may result in something that is considered meaningful in the learning context. This is our <strong>hypothesis</strong>.</p>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"title": "Hypothesis",
+			"text": "%md\n* Normally, documents adhere to a particular shape of uniqueness (zipf's curve)\n* The extent to which each section of a document deviates from a model may given an indication of typical vs atypical writing\n* Identification of atypical writing may be helpful for the learner (and/or teacher)\n\n**Skewness may be an indicator of the balance of unique words in a text, and would allow easy computation**",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:52-0400",
+			"config": {
+				"colWidth": 6,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"title": true,
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497154126803_205037201",
+			"id": "20170611-140846_1706420031",
+			"dateCreated": "2017-06-11T14:08:46-0400",
+			"dateStarted": "2017-06-12T22:47:52-0400",
+			"dateFinished": "2017-06-12T22:47:52-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3894",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<ul>\n  <li>Normally, documents adhere to a particular shape of uniqueness (zipf&rsquo;s curve)</li>\n  <li>The extent to which each section of a document deviates from a model may given an indication of typical vs atypical writing</li>\n  <li>Identification of atypical writing may be helpful for the learner (and/or teacher)</li>\n</ul>\n<p><strong>Skewness may be an indicator of the balance of unique words in a text, and would allow easy computation</strong></p>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"title": "Analyse sections for feature",
+			"text": "val sectionVocab = pharmText.split(\"\\n\").map(text => tapServer.getVocab(text).results)\n\nval secWords = doc.sections.map(sec => sec.sentences.map( s => s.tokens.length).sum)\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:50:06-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496875598151_-1476751033",
+			"id": "20170608-084638_426639337",
+			"dateCreated": "2017-06-08T08:46:38-0400",
+			"dateStarted": "2017-06-12T22:50:06-0400",
+			"dateFinished": "2017-06-12T22:50:13-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3895"
+		},
+		{
+			"title": "Create analytics",
+			"text": "import org.apache.commons.math3.stat.descriptive._\n\ndef descriptiveStats(xs:List[Int]) = new DescriptiveStatistics(xs.map(_.toDouble).toArray)\n\ndef skewDiff = {\n    val docVocabStats  = {\n        val ds = descriptiveStats(docVocab.map(_._2.size).toList)\n        ds.getSkewness()\n    }\n\n    val secVocabStats = sectionVocab.map { sec =>\n        val ds = descriptiveStats(sec.map(_._2.size).toList)\n        //println(ds)\n        ds.getSkewness()\n    }\n\n    val skewDiffs = secVocabStats.map {sec => \n        if (sec.isNaN) docVocabStats\n        else docVocabStats - sec\n    }\n    skewDiffs.zipWithIndex.map(sec => \"\"+(sec._2+1)+\"\\t\"+f\"${sec._1}%1.2f\").mkString(\"\\n\")\n}\n\n\nprintln(s\"%table section\\tunique\\n$skewDiff\")",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:50:18-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+					"1": {
+						"graph": {
+							"mode": "lineChart",
+							"height": 300,
+							"optionOpen": false
+						},
+						"helium": {
+						}
+					}
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496875612539_2022555537",
+			"id": "20170608-084652_98756127",
+			"dateCreated": "2017-06-08T08:46:52-0400",
+			"dateStarted": "2017-06-12T22:50:18-0400",
+			"dateFinished": "2017-06-12T22:50:21-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3896"
+		},
+		{
+			"title": "Visualise for learner",
+			"text": "\n\n//Identify the unique words (occurrence count of 1)\nval uniqueWords = docVocab(\"1\").toSet\n//Add unique words as phrases in displayDocument format\nval dispSections = doc.sections.map { sec =>\n    val secText = sec.sentences.map(_.text).mkString(\" \")\n    val secPhrases = sec.sentences.flatMap(sent => sent.tokens.toSet.intersect(uniqueWords).map(w => DisplayPhrase(w,\"unique\")))\n    DisplaySection(secText,secPhrases)\n}\nval dispDoc = DisplayDoc(\"Pharmacy Example Text\", dispSections)\n\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:50:26-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1496875636936_1113424535",
+			"id": "20170608-084716_1136956036",
+			"dateCreated": "2017-06-08T08:47:16-0400",
+			"dateStarted": "2017-06-12T22:50:26-0400",
+			"dateFinished": "2017-06-12T22:50:30-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3897"
+		},
+		{
+			"title": "Set the style",
+			"text": "%angular\n<style>\n.unique {\n    background-color:lightgreen;\n}\n</style>",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:52-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/undefined",
+				"editorHide": false,
+				"tableHide": false,
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497171302010_-855369557",
+			"id": "20170611-185502_918503632",
+			"dateCreated": "2017-06-11T18:55:02-0400",
+			"dateStarted": "2017-06-12T22:47:52-0400",
+			"dateFinished": "2017-06-12T22:47:52-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3898",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "ANGULAR",
+						"data": "<style>\n.unique {\n    background-color:lightgreen;\n}\n</style>"
+					}
+				]
+			}
+		},
+		{
+			"title": "Display the marked up text",
+			"text": "markup(dispDoc)",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:50:42-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497172376084_364019536",
+			"id": "20170611-191256_40271610",
+			"dateCreated": "2017-06-11T19:12:56-0400",
+			"dateStarted": "2017-06-12T22:50:42-0400",
+			"dateFinished": "2017-06-12T22:50:43-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3899"
+		},
+		{
+			"title": "Workshop approach",
+			"text": "%md\n\n\nTo get the most out of this workshop, you can work at a level most appropriate to your abilities:\n\n- **Novice:** Follow along step by step in the provided notes\n- **Experienced:** Use the notes as guides, but try pushing the content with new code, or try in a different language\n- **Expert:** Extract the principles from the workshop but implement yourself in new notes or by writing code in an IDE\n\nYou will also get more value out of this workshop if you:\n\n- **Question** how the ideas apply to your own work, and critique the material presented\n- **Discuss** your ideas with others and work collaboratively\n- **Share** your work with others at the workshop and beyond\n \n#### Common theme\n\nRegardless of which level you work at, there will be a common theme for the workshop which can be seen in 3 fundamental questions:\n\n1. What are the pedagogical aspects?\n2. What are the computational aspects?\n3. How do we connect the pedagogical and the computational\n\nWe will discover that simple analytics can be hard to connect to learning, and that meaningful learning tasks can be hard to implement computationally. However, the main goal of the workshop is to demonstrate an approach that builds connections between learning and analytics in a way that produces Writing Analytics with potential learning benefits. As such, the workshop is not a solution to a problem nor an answer to a question, but rather the demonstration of a process that will hopefully be beneficial to you in solving problems and answering questions related to Writing Analytics. \n\n\n### Resources\n\nEverything that you require for this workshop is available on GitHub and released under an Apache 2.0 license. We encourage you to make improvements (or add additional resources) and contribute back to the repos so that this workshop can be improved for future participants. \n\nIf you are unfamiliar with working with GitHub, then see [this website]() for helpful tips.\n\nYou can run these notebooks yourself on your own machine by following the installation steps in the [repo's README](https://github.com/uts-cic/tap-notebooks)\n\nYou can find some help for using Zeppelin here...\n\n   - [Zeppelin documentation]()\n   - [Zeppelin UI Overview](http://zeppelin.apache.org/docs/0.7.1/quickstart/explorezeppelinui.html)\n   - [Other]()\n\n***If you find additional helpful resources, please share them***\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:47:53-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"title": true,
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497172382432_726853073",
+			"id": "20170611-191302_596736937",
+			"dateCreated": "2017-06-11T19:13:02-0400",
+			"dateStarted": "2017-06-12T22:47:53-0400",
+			"dateFinished": "2017-06-12T22:47:53-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3900",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<p>To get the most out of this workshop, you can work at a level most appropriate to your abilities:</p>\n<ul>\n  <li><strong>Novice:</strong> Follow along step by step in the provided notes</li>\n  <li><strong>Experienced:</strong> Use the notes as guides, but try pushing the content with new code, or try in a different language</li>\n  <li><strong>Expert:</strong> Extract the principles from the workshop but implement yourself in new notes or by writing code in an IDE</li>\n</ul>\n<p>You will also get more value out of this workshop if you:</p>\n<ul>\n  <li><strong>Question</strong> how the ideas apply to your own work, and critique the material presented</li>\n  <li><strong>Discuss</strong> your ideas with others and work collaboratively</li>\n  <li><strong>Share</strong> your work with others at the workshop and beyond</li>\n</ul>\n<h4>Common theme</h4>\n<p>Regardless of which level you work at, there will be a common theme for the workshop which can be seen in 3 fundamental questions:</p>\n<ol>\n  <li>What are the pedagogical aspects?</li>\n  <li>What are the computational aspects?</li>\n  <li>How do we connect the pedagogical and the computational</li>\n</ol>\n<p>We will discover that simple analytics can be hard to connect to learning, and that meaningful learning tasks can be hard to implement computationally. However, the main goal of the workshop is to demonstrate an approach that builds connections between learning and analytics in a way that produces Writing Analytics with potential learning benefits. As such, the workshop is not a solution to a problem nor an answer to a question, but rather the demonstration of a process that will hopefully be beneficial to you in solving problems and answering questions related to Writing Analytics. </p>\n<h3>Resources</h3>\n<p>Everything that you require for this workshop is available on GitHub and released under an Apache 2.0 license. We encourage you to make improvements (or add additional resources) and contribute back to the repos so that this workshop can be improved for future participants. </p>\n<p>If you are unfamiliar with working with GitHub, then see <a href=\"\">this website</a> for helpful tips.</p>\n<p>You can run these notebooks yourself on your own machine by following the installation steps in the <a href=\"https://github.com/uts-cic/tap-notebooks\">repo&rsquo;s README</a></p>\n<p>You can find some help for using Zeppelin here&hellip;</p>\n<ul>\n  <li><a href=\"\">Zeppelin documentation</a></li>\n  <li><a href=\"http://zeppelin.apache.org/docs/0.7.1/quickstart/explorezeppelinui.html\">Zeppelin UI Overview</a></li>\n  <li><a href=\"\">Other</a></li>\n</ul>\n<p><strong><em>If you find additional helpful resources, please share them</em></strong></p>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"text": "%md\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-12T22:46:57-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497316335660_2072885940",
+			"id": "20170612-211215_1775073492",
+			"dateCreated": "2017-06-12T21:12:15-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:3901"
+		}
+	],
+	"name": "LASI-1",
+	"id": "2CJ2PY64A",
+	"angularObjects": {
+		"2CHGWK3QR:shared_process": [
+
+		],
+		"2CFKZEYRE:shared_process": [
+
+		],
+		"2CHBDJGUA:shared_process": [
+			{
+				"name": "document",
+				"object": [
+					"Before I went on placement in XXXX in the Summer break, I didn’t know how much the pharmacy means in the day-to-day life of the average elderly person, but also how important HMR is, and how it can save lives. I was familiar with the usual aspects of being older: more medical conditions that leads to more medications which leads to more medications being forgotten and the vicious cycle that ensues, but to see how this actually played out in everyday practice, with the consequences that it entailed, was eye opening, sad and exciting all at once.",
+					"We had one case of an elderly gentleman (and he really was a gentle man)- Mr DA, who had been baffling his doctors and the pharmacy for months about his fluctuating INR. No one could work out what it was, and it was only after placement when I rang to enquire as to how this gentleman was going for my case review that I found out that an HMR had been done (finally after multiple requests to the GP) and Mr DA had been intermittently taking fish oil without telling anyone. Mr DA would take a fish oil every other day or so, for a few days, when he remembered, which was a bit patchy at the best of times. As a result his INR would go up and then his warfarin would need to change in his Webster pack that we would pack for him, and then he would forget to take the fish oil for a while and his INR would go down, and his warfarin dose would need to change again- It was IT1 week 3 Cardiovascular right in front of my eyes!"
+				],
+				"noteId": "2CJ2PY64A"
+			},
+			{
+				"name": "title",
+				"object": "Example document",
+				"noteId": "2CJ2PY64A"
+			}
+		]
+	},
+	"config": {
+		"looknfeel": "default",
+		"personalizedMode": "false"
+	},
+	"info": {
+	}
+}
