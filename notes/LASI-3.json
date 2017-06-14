@@ -1,0 +1,1225 @@
+﻿{
+	"paragraphs": [
+		{
+			"title": "Setup",
+			"text": "//IMPORT LIBRARIES\n\nimport org.apache.commons.math3.stat.descriptive._\nimport java.io._\nimport scala.io.Source\nimport scalaj.http._    // to manage http connection to TAP\nimport org.json4s._     // to serialise and deserialise JSON\n\n\n//CREATE CLASSES, OBJECTS AND TYPES\n\ncase class Message(message:String)\ncase class Result[T](message:String,results:T)\ncase class Tags(lemmas:List[String] = List(),posTags:List[String] = List())\ncase class Sentence(text:String,tokens:List[String],tags:Tags = Tags())\ncase class Section(sentences:List[Sentence])\ncase class Document(sections:List[Section])\ntype Vocab = Map[String,List[String]]\n  \ncase class DisplayPhrase(text:String,style:String)\ncase class DisplaySection(text:String,phrases:List[DisplayPhrase])\ncase class DisplayDoc(title:String,sections:List[DisplaySection])\n\n//The TapIO class\ncase class TapIO(server:String = \"http://localhost:8080\") {\n    \n    //Import some helper libraries\n   import scalaj.http._\nimport org.json4s._\n    import org.json4s.jackson.Serialization\n    import org.json4s.jackson.Serialization.{read, write}\n    \n    implicit val defaultFormats = Serialization.formats(NoTypeHints)\n    \n    val API_VERSION = \"v1\"\n    lazy val API_URL = server+\"/\"+API_VERSION\n    lazy val HEALTH_URL = API_URL+\"/health\"\n    lazy val CLEAN_URL = API_URL+\"/analyse/text/clean\"\n    lazy val STRUCTURE_URL = API_URL+\"/analyse/text/structure\"\n    lazy val VOCAB_URL = API_URL+\"/analyse/text/vocab\"\n    \n    def serverDetails = Http(API_URL).asString\n\n    def getHealthMessage(debug:Boolean = false) = {\n        println(s\"Connecting to $HEALTH_URL\")\n        val response = Http(HEALTH_URL).asString\n        if(debug) println(response)\n        read[Message](response.body)\n    }\n\n    def serverIsHealthy = {\n        try { getHealthMessage().message==\"ok\" }\n        catch { case e:Exception => {\n                println(s\"There was a problem with the server: $e\")\n                false }\n        }\n    }\n    \n    def cleanText(text:String) = {\n    //println(s\"Cleaning text: $text\")\n    val response = Http(CLEAN_URL).postData(text).header(\"content-type\", \"application/json\").asString\n    //println(response)\n    read[Result[List[String]]](response.body)\n  }\n\n  def getStructure(text:String) = {\n    //println(s\"Getting structure for text: $text\")\n    val response = Http(STRUCTURE_URL).postData(text).header(\"content-type\", \"application/json\").asString\n    //println(response)\n    read[Result[Document]](response.body)\n  }\n  \n  def getVocab(text:String) = {\n    //println(s\"Getting structure for text: $text\")\n    val response = Http(VOCAB_URL).postData(text).header(\"content-type\", \"application/json\").asString\n    //println(response.body)\n    read[Result[Vocab]](response.body) \n  }\n}\n\nval tapServer = TapIO(\"https://b9yiddda69.execute-api.ap-southeast-2.amazonaws.com/lasi\")\n//val tapServer = TapIO()\n\n\n\n//Define functions\n\n/*********************************\n* getFile\n*********************************/\ndef getFile(fname:String,user:String=\"master\",localPath:String=\"/home/ec2-user/data\"):String = {\n    val file = new File(localPath+\"/\"+fname)\n    file.getParentFile.mkdirs\n    try {\n        if (!file.exists) {\n        //println(\"Getting from S3\")\n         val response = Http(s\"http://lasi-working-files.s3-website-ap-southeast-2.amazonaws.com/$user/$fname\").asString\n         if (response.code!=200) throw new Exception(\"Cannot get file from S3\")\n         //println(\"Saving to local directory\")\n         val bw = new BufferedWriter(new FileWriter(file))\n            bw.write(response.body)\n            bw.close()\n    }\n    //println(\"Getting from local directory\")\n    Source.fromFile(file).getLines.mkString(\"\\n\") //Each line ends with a newline character, so put them back for string\n    } catch {\n        case e:Exception => {\n            println(s\"ERROR: There was a problem getting the file: $e\")\n            \"\"\n        }\n    }\n}\n\n/*********************************\n* saveAsFile\n*********************************/\ndef saveAsFile(contents:String,name:String,localPath:String=\"/home/ec2-user/data\") = {\n    try {\n        val file = new File(localPath+\"/\"+name)\n        val bw = new BufferedWriter(new FileWriter(file))\n        bw.write(contents)\n        bw.close()\n        true\n    } catch {\n        case e:Exception => {\n            println(\"ERROR: There was a problem saving the file: $e\")\n            false\n        }\n    }\n}\n\n/*********************************\n* displayStructure\n*********************************/\ndef displayStructure(document:Document) = {\n    document.sections.map { section =>\n        \"section\\t\\t\\t\\n\".+{\n            section.sentences.map { sentence =>\n                \"\\ttext: \"+ sentence.text + \"\\t\\t\\n\"+\n                \"\\ttokens: |\"+ sentence.tokens.mkString(\"|\")+\"|\\t\\n\"+\n                \"\\t\\tlemmas: |\"+ sentence.tags.lemmas.mkString(\"|\")+\"|\\n\"+\n                \"\\t\\tposTags: |\"+ sentence.tags.posTags.mkString(\"|\")+\"|\\n\"\n            }.mkString(\"\")\n        }\n    }.mkString(\"\")\n}\n\n/*********************************\n* descriptiveStats\n*********************************/\ndef descriptiveStats(xs:List[Int]) = new DescriptiveStatistics(xs.map(_.toDouble).toArray)\n\n/*********************************\n* markupsection\n*********************************/\ndef markupSection(phrases:List[DisplayPhrase],markedUp:String=\"\"):String = {\n  if (phrases.isEmpty) markedUp\n  else {\n    val p = phrases.head\n    val newMarkedUp = markedUp.replace(p.text,s\"\"\"<span class=\"${p.style}\">${p.text}</span>\"\"\")\n    //Find matching text (no case)\n    //get sentence word\n    //Build replacement from sentence word (not token)\n    //Do the replacement\n    \n    markupSection(phrases.tail,newMarkedUp)\n  }\n}\n\n/*********************************\n* markup\n*********************************/\ndef markup(doc:DisplayDoc) = {\n  println(s\"%angular <h3>${doc.title}</h3>\")\n  doc.sections.map( s => markupSection(s.phrases,s.text)).foreach { sec => \n      println(s\"<p>$sec<p>\")\n  }\n}\n\n/*********************************\n* histogram\n*********************************/\ndef histogram(input:List[Int],bins:Int,min:Option[Int]=None,max:Option[Int]=None): List[Int] = {\n  val rangeMin = min.getOrElse(input.min).toDouble\n  val binWidth = (max.getOrElse(input.max).toDouble - rangeMin)/bins\n\n  def upper(c:Int) = rangeMin+(binWidth*c)\n\n  def histogramBuilder(inputList:List[Int],count:Int=1,histogram:List[Int]=List()): List[Int] = {\n    val lists = inputList.partition(_ <= upper(count))\n    val newHist = histogram :+ lists._1.length\n    if (newHist.length == bins) newHist\n    else histogramBuilder(lists._2,count+1,newHist)\n  }\n\n  histogramBuilder(input)\n}\n\n/*********************************\n* histogramDbl\n*********************************/\ndef histogramDbl(input:List[Double],bins:Int,min:Option[Double]=None,max:Option[Double]=None): List[Int] = {\n  val rangeMin = min.getOrElse(input.min)\n  val binWidth = (max.getOrElse(input.max) - rangeMin)/bins\n\n  def upper(c:Double) = rangeMin+(binWidth*c)\n\n  def histogramBuilder(inputList:List[Double],count:Int=1,histogram:List[Int]=List()): List[Int] = {\n    val lists = inputList.partition(_ <= upper(count))\n    val newHist:List[Int] = histogram :+ lists._1.length\n    if (newHist.length == bins) newHist\n    else histogramBuilder(lists._2,count+1,newHist)\n  }\n\n  histogramBuilder(input)\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T08:52:41-0400",
+			"config": {
+				"editorSetting": {
+					"language": "scala"
+				},
+				"colWidth": 12,
+				"editorMode": "ace/mode/scala",
+				"editorHide": true,
+				"title": true,
+				"results": {
+				},
+				"enabled": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497367285671_-581514805",
+			"id": "20170613-042335_1891105030",
+			"dateCreated": "2017-06-13T11:21:25-0400",
+			"dateStarted": "2017-06-14T07:30:18-0400",
+			"dateFinished": "2017-06-14T07:30:41-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"focus": true,
+			"$$hashKey": "object:13393"
+		},
+		{
+			"title": "Discuss",
+			"text": "%md\n> Discuss this session online in the Gitter [Writing Analytics Community](https://gitter.im/writing-analytics/Lobby).",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T08:59:11-0400",
+			"config": {
+				"tableHide": false,
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"colWidth": 12,
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"title": true,
+				"results": {
+				},
+				"enabled": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<blockquote>\n  <p>Discuss this session online in the Gitter <a href=\"https://gitter.im/writing-analytics/Lobby\">Writing Analytics Community</a>.</p>\n</blockquote>\n</div>"
+					}
+				]
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497367285689_-577667316",
+			"id": "20170613-100731_991140834",
+			"dateCreated": "2017-06-13T11:21:25-0400",
+			"dateStarted": "2017-06-14T08:59:11-0400",
+			"dateFinished": "2017-06-14T08:59:11-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13394"
+		},
+		{
+			"text": "//Get our demo text and change the new lines to paragraph breaks (2 new lines)\nval pharmText = getFile(\"pharm-sample.txt\").replace(\"\\n\",\"\\n\\n\")\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T08:59:30-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/scala",
+				"editorHide": false,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497439930246_-1396181607",
+			"id": "20170614-073210_1072989055",
+			"dateCreated": "2017-06-14T07:32:10-0400",
+			"dateStarted": "2017-06-14T07:33:29-0400",
+			"dateFinished": "2017-06-14T07:33:29-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13395"
+		},
+		{
+			"text": "//Get the structure of the pharm-sample text\nval doc = tapServer.getStructure(pharmText).results",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:33:36-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497367285870_622364503",
+			"id": "20170612-223749_888288598",
+			"dateCreated": "2017-06-13T11:21:25-0400",
+			"dateStarted": "2017-06-14T07:33:36-0400",
+			"dateFinished": "2017-06-14T07:33:37-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13396"
+		},
+		{
+			"title": "Counting",
+			"text": "{ \n    //Get the counts\n    val numSections = doc.sections.length\n    val numSentences = doc.sections.map(_.sentences.length).reduce(_+_)\n    val numTokens = doc.sections.flatMap(_.sentences.map(_.tokens.length)).reduce(_+_)\n    \n    //Calc averages\n    val avgSentPerSect = numSentences/numSections.toDouble\n    val avgTokPerSect = numTokens/numSections.toDouble\n    val avgTokPerSent = numTokens/numSentences.toDouble\n\n    //How many chunks?\n    println(s\"Number of sections: $numSections\")\n    println(s\"Number of sentences: $numSentences\")\n    println(s\"Number of tokens: $numTokens\")\n    \n    //Basic averages?\n    println(f\"Average sentences per section: $avgSentPerSect%1.1f\")\n    println(f\"Average tokens per section: $avgTokPerSect%1.1f\")\n    println(f\"Average tokens per sentence: $avgTokPerSent%1.1f\")\n    \n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:30:19-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497367485072_-210941962",
+			"id": "20170613-112445_1461112924",
+			"dateCreated": "2017-06-13T11:24:45-0400",
+			"dateStarted": "2017-06-14T07:30:42-0400",
+			"dateFinished": "2017-06-14T07:30:46-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13397"
+		},
+		{
+			"text": "%md\nThese simple metrics would allow us to compare documents based on their sizes.\nHowever, if we look at the metrics inside a document we can get some more interesting insights.\nAs an example, let's take a look at sentence length of the course of a document.",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T08:59:40-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497367490925_342342281",
+			"id": "20170613-112450_1525075073",
+			"dateCreated": "2017-06-13T11:24:50-0400",
+			"dateStarted": "2017-06-14T08:59:40-0400",
+			"dateFinished": "2017-06-14T08:59:40-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13398",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<p>These simple metrics would allow us to compare documents based on their sizes.<br/>However, if we look at the metrics inside a document we can get some more interesting insights.<br/>As an example, let&rsquo;s take a look at sentence length of the course of a document.</p>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"text": "{\n    val sentences = doc.sections.flatMap(_.sentences)\n    //get the number of tokens for each sentence (numbered 1 to 22)\n    val tokenCounts = sentences.zipWithIndex.map { case(sent,idx) =>\n        (idx+1,sent.tokens.length)\n    }\n    //format ready for graphing\n    val rowFormatter = (t:(Int,Int)) => s\"${t._1}\\t${t._2}\\n\"\n\n    val formatted = tokenCounts.map(rowFormatter)\n    \n    println(s\"%table sentence\\ttokenCount\\n$formatted\")\n    \n}\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:30:19-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+					"0": {
+						"graph": {
+							"mode": "scatterChart",
+							"height": 300,
+							"optionOpen": false
+						},
+						"helium": {
+						}
+					},
+					"1": {
+						"graph": {
+							"mode": "scatterChart",
+							"height": 300,
+							"optionOpen": false
+						},
+						"helium": {
+						}
+					}
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497367905141_1575271514",
+			"id": "20170613-113145_1152842092",
+			"dateCreated": "2017-06-13T11:31:45-0400",
+			"dateStarted": "2017-06-14T07:30:44-0400",
+			"dateFinished": "2017-06-14T07:30:46-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13399"
+		},
+		{
+			"title": "Anomalies",
+			"text": "//Let's take a closer look at the anomalous sentences (>50 and < 21)\nobject metrics {\n    val sentLengths = doc.sections.flatMap(_.sentences).map(snt => (snt.text,snt.tokens.length))\n}\n\n{\nval long = metrics.sentLengths.filter(_._2 > 50)\n\nval short = metrics.sentLengths.filter(_._2 < 21)\n\nlong.foreach(println(_))\nshort.foreach(println(_))\n}\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:30:19-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497367921150_-189171618",
+			"id": "20170613-113201_447058239",
+			"dateCreated": "2017-06-13T11:32:01-0400",
+			"dateStarted": "2017-06-14T07:30:46-0400",
+			"dateFinished": "2017-06-14T07:30:48-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13400"
+		},
+		{
+			"title": "Automating anomaly detection",
+			"text": "%md\nCan we automate finding these anomalous sentences?\nLet's take a look at a histogram of these values.",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T08:59:50-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"title": true,
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497368333880_-1013489297",
+			"id": "20170613-113853_184687700",
+			"dateCreated": "2017-06-13T11:38:53-0400",
+			"dateStarted": "2017-06-14T08:59:50-0400",
+			"dateFinished": "2017-06-14T08:59:50-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13401",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<p>Can we automate finding these anomalous sentences?<br/>Let&rsquo;s take a look at a histogram of these values.</p>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"text": "//List of sentenceLengths\nval lengths = metrics.sentLengths.map(_._2)\n\n//Histogram visualisation\n{\n    val hist = histogram(lengths,10,Some(1))\n    \n    val values = hist.zipWithIndex.map(t =>\"\"+(t._2+1)+\"\\t\"+t._1).mkString(\"\\n\")\n    \n    println(s\"%table bin\\tcount\\n$values\")\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:30:20-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+					"1": {
+						"graph": {
+							"mode": "multiBarChart",
+							"height": 300,
+							"optionOpen": false
+						},
+						"helium": {
+						}
+					}
+				},
+				"editorSetting": {
+					"language": "scala",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/scala",
+				"editorHide": false,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497368494673_1079958473",
+			"id": "20170613-114134_1416261375",
+			"dateCreated": "2017-06-13T11:41:34-0400",
+			"dateStarted": "2017-06-14T07:30:47-0400",
+			"dateFinished": "2017-06-14T07:30:49-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13402"
+		},
+		{
+			"title": "Stats outlier detection",
+			"text": "%md\nSo it looks like a normal curve with outliers in bin 10 (long sentences). This indicates that we may be able to automate the detection of these sentences using basic descriptive stats.",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T08:59:55-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false,
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497368518422_1163849057",
+			"id": "20170613-114158_991636743",
+			"dateCreated": "2017-06-13T11:41:58-0400",
+			"dateStarted": "2017-06-14T08:59:55-0400",
+			"dateFinished": "2017-06-14T08:59:55-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13403",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<p>So it looks like a normal curve with outliers in bin 10 (long sentences). This indicates that we may be able to automate the detection of these sentences using basic descriptive stats.</p>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"text": "//Get the descriptive stats for our lengths\nval stats = new DescriptiveStatistics(lengths.map(_.toDouble).toArray)",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:30:20-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/scala",
+				"editorHide": false,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497368728900_1883992252",
+			"id": "20170613-114528_70781606",
+			"dateCreated": "2017-06-13T11:45:28-0400",
+			"dateStarted": "2017-06-14T07:30:48-0400",
+			"dateFinished": "2017-06-14T07:30:50-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13404"
+		},
+		{
+			"text": "//Now use these to find our outlier sentences\n val anomalySentences = {\n    //Set our thresholds - 1.5 stdDev still arbitrary!\n    val mean = stats.getMean()\n    val stdDev = stats.getStandardDeviation()\n    val upperThresh =  mean+(1.5*stdDev)\n    val lowerThresh = mean-(1.5*stdDev)\n    \n    //Define a filter function\n    def outlier(x:Int):Boolean = { lowerThresh > x || x > upperThresh }\n    \n    //Apply the filter to our sentences and print the result\n    metrics.sentLengths.filter(sl => outlier(sl._2))\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:30:20-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497368754681_-2053512667",
+			"id": "20170613-114554_2039005113",
+			"dateCreated": "2017-06-13T11:45:54-0400",
+			"dateStarted": "2017-06-14T07:30:49-0400",
+			"dateFinished": "2017-06-14T07:30:51-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13405"
+		},
+		{
+			"text": "anomalySentences.foreach(s => println(s._1))",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:30:20-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497368828420_1407828000",
+			"id": "20170613-114708_1774286055",
+			"dateCreated": "2017-06-13T11:47:08-0400",
+			"dateStarted": "2017-06-14T07:30:51-0400",
+			"dateFinished": "2017-06-14T07:30:52-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13406"
+		},
+		{
+			"text": "%md\n * Note the anaphora in the short sentence. For some processing, do we want to concatenate these types of sentences?\n * Are the long sentences wrong?\n * Are we interested in the quality of the writing, or the quality of the reflection or both?",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T09:00:01-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497369371296_-1639017153",
+			"id": "20170613-115611_1154043022",
+			"dateCreated": "2017-06-13T11:56:11-0400",
+			"dateStarted": "2017-06-14T09:00:01-0400",
+			"dateFinished": "2017-06-14T09:00:01-0400",
+			"status": "FINISHED",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13407",
+			"results": {
+				"code": "SUCCESS",
+				"msg": [
+					{
+						"type": "HTML",
+						"data": "<div class=\"markdown-body\">\n<ul>\n  <li>Note the anaphora in the short sentence. For some processing, do we want to concatenate these types of sentences?</li>\n  <li>Are the long sentences wrong?</li>\n  <li>Are we interested in the quality of the writing, or the quality of the reflection or both?</li>\n</ul>\n</div>"
+					}
+				]
+			}
+		},
+		{
+			"title": "What kinds of words? Vocabulary",
+			"text": "%md\n* What can the words themselves tell us?\n* Do the words belong to domain vocabulary?\n* How does the use of words change over the course of a document?\n* How could this be meaningful to the learner?",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:30:20-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "markdown",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/markdown",
+				"title": true,
+				"editorHide": true,
+				"tableHide": false
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497369539178_-827384153",
+			"id": "20170613-115859_887456251",
+			"dateCreated": "2017-06-13T11:58:59-0400",
+			"dateStarted": "2017-06-14T07:30:20-0400",
+			"dateFinished": "2017-06-14T07:30:20-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13408"
+		},
+		{
+			"text": "//Lets get the vocab for both the document as a whole, and for each section.\nval docVocab = tapServer.getVocab(pharmText).results\nval secVocab = pharmText.split(\"\\n\\n\").map(sec => tapServer.getVocab(sec).results).toList",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:34:53-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497369819668_-1471442300",
+			"id": "20170613-120339_1648677600",
+			"dateCreated": "2017-06-13T12:03:39-0400",
+			"dateStarted": "2017-06-14T07:34:53-0400",
+			"dateFinished": "2017-06-14T07:35:00-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13409"
+		},
+		{
+			"text": "//How many words in each section?\nval secWords = doc.sections.map(sec => sec.sentences.map( s => s.tokens.length).sum)",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:35:04-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497369911524_385325244",
+			"id": "20170613-120511_842389630",
+			"dateCreated": "2017-06-13T12:05:11-0400",
+			"dateStarted": "2017-06-14T07:35:04-0400",
+			"dateFinished": "2017-06-14T07:35:05-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13410"
+		},
+		{
+			"title": "Unique words",
+			"text": "//Unique words\nval docUnique = docVocab.get(\"1\").getOrElse(List()).toSet\nval secUnique = secVocab.map(sec => sec.get(\"1\").getOrElse(List()).toSet.intersect(docUnique)).toList\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:35:24-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497370071125_-1010930159",
+			"id": "20170613-120751_786818730",
+			"dateCreated": "2017-06-13T12:07:51-0400",
+			"dateStarted": "2017-06-14T07:35:24-0400",
+			"dateFinished": "2017-06-14T07:35:25-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13411"
+		},
+		{
+			"text": "//How many unique (to the document) words in each section?\nprintln(secUnique.map(_.size))\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:35:34-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497370140105_-1031798545",
+			"id": "20170613-120900_2089720195",
+			"dateCreated": "2017-06-13T12:09:00-0400",
+			"dateStarted": "2017-06-14T07:35:34-0400",
+			"dateFinished": "2017-06-14T07:35:34-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13412"
+		},
+		{
+			"title": "Normalising",
+			"text": "{\n    val printText = secUnique.zipWithIndex.zip(secWords).map(sec => \"\"+(sec._1._2+1)+\"\\t\"+f\"${(sec._1._1.size/sec._2.toDouble)}%1.2f\").mkString(\"\\n\")\n    println(s\"%table section\\tunique\\n$printText\")\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:36:02-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+					"0": {
+						"graph": {
+							"mode": "lineChart",
+							"height": 300,
+							"optionOpen": false
+						},
+						"helium": {
+						}
+					}
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497370327432_2128387714",
+			"id": "20170613-121207_541094222",
+			"dateCreated": "2017-06-13T12:12:07-0400",
+			"dateStarted": "2017-06-14T07:36:02-0400",
+			"dateFinished": "2017-06-14T07:36:03-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13413"
+		},
+		{
+			"title": "Difference in skew",
+			"text": "def descriptiveStats(xs:List[Int]) = new DescriptiveStatistics(xs.map(_.toDouble).toArray)\n\ndef skewDiff = {\n    val docVocabStats  = {\n        val ds = descriptiveStats(docVocab.map(_._2.size).toList)\n        ds.getSkewness()\n    }\n\n    val secVocabStats = secVocab.map { sec =>\n        val ds = descriptiveStats(sec.map(_._2.size).toList)\n        //println(ds)\n        ds.getSkewness()\n    }\n\n    val skewDiffs = secVocabStats.map {sec => \n        if (sec.isNaN) docVocabStats\n        else docVocabStats - sec\n    }\n    skewDiffs.zipWithIndex.map(sec => \"\"+(sec._2+1)+\"\\t\"+f\"${sec._1}%1.2f\").mkString(\"\\n\")\n}\n\n\nprintln(s\"%table section\\tunique\\n$skewDiff\")\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:36:55-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+					"1": {
+						"graph": {
+							"mode": "lineChart",
+							"height": 300,
+							"optionOpen": false
+						},
+						"helium": {
+						}
+					}
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497370450100_-227629016",
+			"id": "20170613-121410_542838696",
+			"dateCreated": "2017-06-13T12:14:10-0400",
+			"dateStarted": "2017-06-14T07:36:55-0400",
+			"dateFinished": "2017-06-14T07:36:57-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13414"
+		},
+		{
+			"text": "//Let's look at that section...\npharmText.split(\"\\n\\n\")(5)",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:37:15-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497402212590_1833961445",
+			"id": "20170613-210332_1242839426",
+			"dateCreated": "2017-06-13T21:03:32-0400",
+			"dateStarted": "2017-06-14T07:37:15-0400",
+			"dateFinished": "2017-06-14T07:37:15-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13415"
+		},
+		{
+			"title": "News article",
+			"text": "//sourced from abc.net.au\n\nval news = \"\"\"\nPolice officers fired \"in the region of 50 rounds\" of ammunition when shooting dead the three terrorists responsible for killing seven people and injuring at least 48 in a vehicle and knife attack, according to London Metropolitan Police.\n\nInvestigators are beginning to establish a clearer picture of events surrounding the attack, in which a van mowed down pedestrians on London Bridge before three attackers got out and began stabbing people in pubs and restaurants.\nBritish Prime Minister Theresa May described the attack as part of a new trend of terrorism, declaring \"enough is enough\" and foreshadowing a raft of measures including a crackdown on extremists' access to the internet.\n\nSpeaking late on Sunday night (local time) London Metropolitan Police Assistant Commissioner Mark Rowley said the white Renault van used in the attack had been recently hired by one of the attackers.\n\"As we currently understand it, the van entered London Bridge at 21:58 travelling from the north to the south side of the river,\" Mr Rowley said.\n\"The van mounted the pavement, and collided with pedestrians before being abandoned, where the attackers, armed with knives, continued into the Borough Market area, stabbing numerous people.\n\"The attackers were then confronted by the firearms officers and I can confirm that eight police firearms officers discharged their weapons.\"\n\nHe said the details were still subject to investigation by the Independent Police Complaints Commission.\n\"Our initial assessment is that in the region of 50 rounds were discharged by eight officers. The three attackers were shot dead,\" he said.\n\"The situation these officers were confronted with was critical — a matter of life and death. Three armed men, wearing what appeared to be suicide belts, had already attacked and killed members of the public and had to be stopped immediately.\n\"Indeed I am not surprised that, faced with what they must have feared were three suicide bombers, the firearms officers fired an unprecedented number of rounds to be completely confident they had neutralised those threats.\n\"As the officers confronted the terrorists — and fired shots — a member of the public also suffered gunshot wounds. Although we do not believe the injuries to critical in nature, they are in hospital receiving medical attention.\"\n\nIbrahim Dag, a taxi driver, witnessed some of the moments that followed the brutal attack.\nHe stopped his car when he saw a young woman calling for help to save her injured boyfriend.\n\"She was telling the guy to keep breathing, and she was shouting for the ambulance and stuff, yelling at people to help them,\" Mr Dag said.\n\nRichard Angell, who was with friends in a nearby restaurant, said he saw someone walking out of the neighbouring restaurant, fully drenched in blood.\n\"What stays with me is the heroism of the emergency services … the ambulance services who have to turn their back on danger to protect the person in front of them, how people come together and work together to do it, and how people defy these cowardly acts,\" he said.\n\nCollege student Vashu Tyagi was leaving his dorm and heading to a nearby bar to celebrate the end of classes when he saw people running frantically down the street.\nAs three men with large knives stabbed anyone in their path, police yelled at Mr Tyagi and others to get back inside — an order he credits with saving his life.\n\nLondon's Metropolitan Police said officers were still working to inform the families of the seven dead victims.\nSo far a Canadian woman and a French citizen are known to be among the dead.\nNearly 50 injured people are currently receiving medical treatment in hospitals spread across the city.\nCordons remain in place near London Bridge and Borough Market and additional armed and unarmed police officers will be posted on the streets.\nThe SITE Intelligence Group said Islamic State's news agency was claiming terrorists from the extremist group carried out the attack.\n\"\"\"\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:37:22-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497402268210_1145907818",
+			"id": "20170613-210428_1928148320",
+			"dateCreated": "2017-06-13T21:04:28-0400",
+			"dateStarted": "2017-06-14T07:37:22-0400",
+			"dateFinished": "2017-06-14T07:37:22-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13416"
+		},
+		{
+			"text": "val skewDiffs = {\n    val cleanText = tapServer.cleanText(news).results\n    val docVocab = tapServer.getVocab(cleanText.mkString(\"\\n\")).results\n     val doc = tapServer.getStructure(news).results\n    val sectionVocab = cleanText.map(text => tapServer.getVocab(text).results)\n    \n    val docVocabStats  = {\n        val ds = descriptiveStats(docVocab.map(_._2.size).toList)\n        ds.getSkewness()\n    }\n\n    val secVocabStats = sectionVocab.map { sec =>\n        val ds = descriptiveStats(sec.map(_._2.size).toList)\n        //println(ds)\n        ds.getSkewness()\n    }\n\n    secVocabStats.map {sec => \n        if (sec.isNaN) docVocabStats\n        else docVocabStats - sec\n    }\n   \n}\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:37:27-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+					"1": {
+						"graph": {
+							"mode": "lineChart",
+							"height": 300,
+							"optionOpen": false
+						},
+						"helium": {
+						}
+					}
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497402460667_-1633843333",
+			"id": "20170613-210740_256884397",
+			"dateCreated": "2017-06-13T21:07:40-0400",
+			"dateStarted": "2017-06-14T07:37:27-0400",
+			"dateFinished": "2017-06-14T07:37:35-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13417"
+		},
+		{
+			"text": "{\nval skewDiffNews = skewDiffs.zipWithIndex.map(sec => \"\"+(sec._2+1)+\"\\t\"+f\"${sec._1}%1.2f\").mkString(\"\\n\")\n\nprintln(s\"%table section\\tunique\\n$skewDiffNews\")\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:38:14-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+					"0": {
+						"graph": {
+							"mode": "lineChart",
+							"height": 300,
+							"optionOpen": false
+						},
+						"helium": {
+						}
+					}
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497404173309_-1944070251",
+			"id": "20170613-213613_1848027663",
+			"dateCreated": "2017-06-13T21:36:13-0400",
+			"dateStarted": "2017-06-14T07:38:14-0400",
+			"dateFinished": "2017-06-14T07:38:14-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13418"
+		},
+		{
+			"text": "val min = skewDiffs.min\nval max = skewDiffs.max-min\nval shapeNorm = skewDiffs.map(v => ((v - (min))/max))\nval invertedShape = shapeNorm.map { v => \n    if (v==1.0) 0.1 else 1-v\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:46:48-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497403951471_584409220",
+			"id": "20170613-213231_1427956791",
+			"dateCreated": "2017-06-13T21:32:31-0400",
+			"dateStarted": "2017-06-14T07:46:48-0400",
+			"dateFinished": "2017-06-14T07:46:49-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13419"
+		},
+		{
+			"text": "{\nval skewDiffNews = invertedShape.zipWithIndex.map(sec => \"\"+(sec._2+1)+\"\\t\"+f\"${sec._1}%1.2f\").mkString(\"\\n\")\n\nprintln(s\"%table section\\tunique\\n$skewDiffNews\")\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:46:53-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+					"0": {
+						"graph": {
+							"mode": "lineChart",
+							"height": 300,
+							"optionOpen": false
+						},
+						"helium": {
+						}
+					}
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497440333685_1563506147",
+			"id": "20170614-073853_783151395",
+			"dateCreated": "2017-06-14T07:38:53-0400",
+			"dateStarted": "2017-06-14T07:46:53-0400",
+			"dateFinished": "2017-06-14T07:46:54-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13420"
+		},
+		{
+			"text": "{\n    val css = invertedShape.zipWithIndex.map {\n        case(shade,idx) => s\"\"\".sec_$idx { background-color: rgba(150,150,0,$shade); }\\n \"\"\"\n    }\n    \n     print(s\"%angular <style> ${css.mkString} </style>\")   \n\n}\n\n",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T09:00:37-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala",
+					"editOnDblClick": true
+				},
+				"editorMode": "ace/mode/scala",
+				"editorHide": false,
+				"tableHide": false,
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497403021694_313367561",
+			"id": "20170613-211701_1267213191",
+			"dateCreated": "2017-06-13T21:17:01-0400",
+			"dateStarted": "2017-06-14T07:47:27-0400",
+			"dateFinished": "2017-06-14T07:47:27-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13421",
+			"title": "CSS"
+		},
+		{
+			"text": "{\nval html = news.split(\"\\n\\n\").zipWithIndex.map { \n    case(txt,idx) => s\"\"\"<p class=\"sec_$idx\">$txt</p>\"\"\"\n}\n\nprint(s\"%angular \"+ html.mkString)\n}",
+			"user": "admin",
+			"dateUpdated": "2017-06-14T09:00:45-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala",
+				"title": true
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497402574851_-848770042",
+			"id": "20170613-210934_1465478101",
+			"dateCreated": "2017-06-13T21:09:34-0400",
+			"dateStarted": "2017-06-14T07:47:00-0400",
+			"dateFinished": "2017-06-14T07:47:00-0400",
+			"status": "FINISHED",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13422",
+			"title": "HTML"
+		},
+		{
+			"user": "admin",
+			"dateUpdated": "2017-06-14T07:30:21-0400",
+			"config": {
+				"colWidth": 12,
+				"enabled": true,
+				"results": {
+				},
+				"editorSetting": {
+					"language": "scala"
+				},
+				"editorMode": "ace/mode/scala"
+			},
+			"settings": {
+				"params": {
+				},
+				"forms": {
+				}
+			},
+			"apps": [
+
+			],
+			"jobName": "paragraph_1497402852350_-1510155046",
+			"id": "20170613-211412_2092212651",
+			"dateCreated": "2017-06-13T21:14:12-0400",
+			"status": "READY",
+			"errorMessage": "",
+			"progressUpdateIntervalMs": 500,
+			"$$hashKey": "object:13423"
+		}
+	],
+	"name": "LASI-3",
+	"id": "2CJ97NCB6",
+	"angularObjects": {
+		"2CHGWK3QR:shared_process": [
+
+		],
+		"2CGJUBZ7V:shared_process": [
+
+		],
+		"2CFA6A5V1:shared_process": [
+
+		],
+		"2CEG2J2DN:shared_process": [
+
+		],
+		"2CEHG1843:shared_process": [
+
+		],
+		"2CFKZEYRE:shared_process": [
+
+		],
+		"2CHBDJGUA:shared_process": [
+
+		]
+	},
+	"config": {
+		"looknfeel": "default",
+		"personalizedMode": "false"
+	},
+	"info": {
+	}
+}
