@@ -1,4 +1,10 @@
-# LASI'17 - Writing Analytics Workshop
+# tap-notebooks-zeppelin
+
+These are Apache Zeppelin notebooks that utilise TAP. This repo has been adapted from one setup for LASI'17 workshop. Those files remain, but are archived in the lasi17 directory as they were written for tapv1 (REST based).
+
+The top level files utilise the current version of TAP which presents a GraphQL API.
+
+### LASI'17 - Writing Analytics Workshop
 
 These are the resources for the [LASI'17 Writing Analytics Workshop](http://lasi.solaresearch.org/workshop-list-17/), 13-15 June 2017, [University of Michigan](http://umich.edu), Ann Arbor, USA.
 
